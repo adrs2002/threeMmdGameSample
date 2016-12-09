@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - loaders - MMD loader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #fff;
+				color: #000;
+				margin: 0px;
+				overflow: hidden;
+			}
+			#info {
+				color: #000;
+				position: absolute;
+				top: 10px;
+				width: 100%;
+				text-align: center;
+				z-index: 100;
+				display:block;
+			}
+			#info a, .button { color: #f00; font-weight: bold; text-decoration: underline; cursor: pointer }
+		</style>
+	</head>
+
+	<body>
+		<div id="info">
+		<a href="http://threejs.org" target="_blank">three.js</a> - MMDLoader test<br />
+		Copyright
+		<a href="http://www.geocities.jp/higuchuu4/index_e.htm" target="_blank">Model Data</a>
+		<a href="http://www.nicovideo.jp/watch/sm13147122" target="_blank">Dance Data</a><br />
+		<a href="http://www.nicovideo.jp/watch/sm11938255" target="_blank">Audio Data</a>
+		<a href="http://www.deviantart.com/art/MMD-Rainbow-Stage-212433590" target="_blank">Stage Data</a><br />
+		<a href="http://www.nicovideo.jp/watch/sm19168559" target="_blank">Original Camera Data(I've customized this)</a>
+		</div>
+
+		<div id="keikoku" style="position:absolute; width:200px; height:100px; color: #FFFFFF; background-color: #000000; text-align: center;">
+			<h2 style="line-height:50px;">プレイエリアの外です</h2>
+		</div>
+
+		<script src="https://threejs.org/build/three.js"></script>
+
+		<script src="https://threejs.org/examples/js/libs/charsetencoder.min.js"></script>
+		<script src="https://threejs.org/examples/js/libs/ammo.js"></script>
+
+		<script src="https://threejs.org/examples/js/loaders/TGALoader.js"></script>
+		<script src="https://threejs.org/examples/js/loaders/MMDLoader.js"></script>
+		<script src="https://threejs.org/examples/js/effects/OutlineEffect.js"></script>
+		<script src="https://threejs.org/examples/js/animation/CCDIKSolver.js"></script>
+		<script src="https://threejs.org/examples/js/animation/MMDPhysics.js"></script>
+
+		<script src="https://threejs.org/examples/js/Detector.js"></script>
+		<script src="https://threejs.org/examples/js/libs/stats.min.js"></script>
+
+		<script>
+
+			var container, stats;
+
+			var mesh, camera, scene, renderer;
+			var helper;
+
+			var ready = false;
+
+			var mouseX = 0, mouseY = 0;
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			var clock = new THREE.Clock();
+			var keikokuDiv = null;
+			
+			init();
+			animate();
+
+			function init() {
+
+				container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 2000 );
+
+				// scene
+
+				scene = new THREE.Scene();
+
+				var ambient = new THREE.AmbientLight( 0x666666 );
+				scene.add( ambient );
+
+				var directionalLight = new THREE.DirectionalLight( 0x887766 );
+				directionalLight.position.set( -1, 1, 1 ).normalize();
+				scene.add( directionalLight );
+
+				//
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setClearColor( new THREE.Color( 0xffffff ) );
+				container.appendChild( renderer.domElement );
+
+				// model
+
+				var onProgress = function ( xhr ) {
+					if ( xhr.lengthComputable ) {
+						var percentComplete = xhr.loaded / xhr.total * 100;
+						console.log( Math.round(percentComplete, 2) + '% downloaded' );
+					}
+				};
+
+				var onError = function ( xhr ) {
+				};
+
+				var modelFile = 'https://threejs.org/examples/models/mmd/miku/miku_v2.pmd';
+				//var vmdFiles = [ 'https://threejs.org/examples/models/mmd/vmd/wavefile_v2.vmd' ];
+				var vmdFiles = [ 'https://threejs.org/examples/models/mmd/vmd/wavefile_v2.vmd' ];
+				var cameraFiles = [ 'https://threejs.org/examples/models/mmd/vmd/wavefile_camera.vmd' ];
+				var stageFile = 'https://threejs.org/examples/models/mmd/stage/stage.pmd';
+				var audioFile = 'https://threejs.org/examples/models/mmd/audio/wavefile_short.mp3';
+				var audioParams = { delayTime: 160 * 1 / 30 };
+
+				helper = new THREE.MMDHelper( renderer );
+
+				var loader = new THREE.MMDLoader();
+				loader.setDefaultTexturePath( 'https://threejs.org/examples/models/mmd/default/' );
+
+				loader.load( modelFile, vmdFiles, function ( object ) {
+
+					mesh = object;
+
+					helper.add( mesh );
+					helper.setAnimation( mesh );
+
+					/*
+					 * Note: You must set Physics
+					 *       before you add mesh to scene or any other 3D object.
+					 * Note: Physics calculation is pretty heavy.
+					 *       It may not be acceptable for most mobile devices yet.
+			 		 */
+					if ( ! isMobileDevice() ) {
+
+						helper.setPhysics( mesh );
+
+					}
+
+					loader.loadVmds( cameraFiles, function ( vmd ) {
+
+						helper.setCamera( camera );
+
+						loader.pourVmdIntoCamera( camera, vmd );
+						helper.setCameraAnimation( camera );
+
+						loader.loadModel( stageFile, function ( stage ) {
+							/*
+							loader.loadAudio( audioFile, function ( audio, listener ) {
+
+								listener.position.z = 1;
+
+								helper.setAudio( audio, listener, audioParams );
+
+
+								helper.unifyAnimationDuration();
+
+								scene.add( audio );
+								scene.add( listener );
+								scene.add( stage );
+								scene.add( mesh );
+
+								ready = true;
+
+							}, onProgress, onError );
+							*/
+								scene.add( stage );
+								scene.add( mesh );
+
+								ready = true;
+						}, onProgress, onError );
+
+					}, onProgress, onError );
+
+				}, onProgress, onError );
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+			}
+
+			function onWindowResize() {
+
+				windowHalfX = window.innerWidth / 2;
+				windowHalfY = window.innerHeight / 2;
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				helper.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = ( event.clientX - windowHalfX ) / 2;
+				mouseY = ( event.clientY - windowHalfY ) / 2;
+
+			}
+
+			//
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+				render();
+
+			}
+
+			function render() {
+
+
+				if ( ready ) {
+					//警告DIVを定義
+					if(keikokuDiv == null){ keikokuDiv = document.getElementById("keikoku"); }
+
+					var delta = clock.getDelta();
+					helper.animate( delta );
+					helper.render( scene, camera );
+					
+					//見えている判断チェック！
+					var pantLook = false;
+					var pantsPos= new THREE.Vector3();  //返却用の入れ物、兼少しだけ腰から下げた位置を取りたい
+					pantsPos.set(0, -3, 0 ),
+					mesh.skeleton.bones[9].localToWorld(pantsPos);   //ボーン9番が、下半身の親ボーンとなる
+					
+					var cp = new THREE.Vector3();
+					var cl = new THREE.Vector3();
+					var cr = new THREE.Vector3();
+					
+					//ぱんつとカメラまでの距離を測定するために、ベクトルの【差】を検出
+					cp.copy(pantsPos);
+					cp.sub(camera.position);
+					
+					//同じように、膝に対しても行う
+					cl.set(0,-1,-4);			//膝ぴったりではなく、膝のやや後ろにする
+					mesh.skeleton.bones[41].localToWorld(cl); 	//左ひざ
+					cl.sub(camera.position);
+					
+					cr.set(0,-1,-4);		
+					mesh.skeleton.bones[73].localToWorld(cr); 	//右ひざ
+					cr.sub(camera.position);
+					
+					/*
+					//カメラより高い位置にパンツがあったら、見えたという判断！
+					if(pantsPos.y > camera.position.y && camera.rotation.x > 0) {
+						//3D座標をスクリーン座標に
+						pantsPos.project(camera);
+						if(pantsPos.z < 1.0){
+							pantLook = true;
+							pantsPos.x = (pantsPos.x * window.innerWidth * 0.5) + window.innerWidth * 0.5;
+							pantsPos.y = -(pantsPos.y * window.innerHeight  * 0.5) + window.innerHeight * 0.5;
+							keikokuDiv.style.top = pantsPos.y - 50 + "px"; 
+							keikokuDiv.style.left = pantsPos.x - 100 + "px";
+						}
+						
+					}
+					*/
+					
+					//カメラより左右の膝のどちらでも近いほうにあったら、パンツが見えているとする！
+					if(cp.length() > cl.length() || cp.length() > cr.length()  )
+					{
+						//3D座標をスクリーン座標に
+						pantsPos.project(camera);
+						if(pantsPos.z < 1.0){
+							pantLook = true;
+							pantsPos.x = (pantsPos.x * window.innerWidth * 0.5) + window.innerWidth * 0.5;
+							pantsPos.y = -(pantsPos.y * window.innerHeight  * 0.5) + window.innerHeight * 0.5;
+							keikokuDiv.style.top = pantsPos.y - 50 + "px"; 
+							keikokuDiv.style.left = pantsPos.x - 100 + "px";
+						}
+					}
+					
+					if(pantLook){keikokuDiv.style.visibility="visible";}
+					else        {keikokuDiv.style.visibility="hidden";}
+				} else {
+
+					renderer.render( scene, camera );
+
+				}
+
+			}
+
+			// easy mobile device detection
+			function isMobileDevice () {
+
+				if ( navigator === undefined || navigator.userAgent === undefined ) {
+
+					return true;
+
+				}
+
+				var s = navigator.userAgent;
+
+				if (    s.match( /iPhone/i )
+//				     || s.match( /iPad/i )
+				     || s.match( /iPod/i )
+				     || s.match( /webOS/i )
+				     || s.match( /BlackBerry/i )
+				     || ( s.match( /Windows/i ) && s.match( /Phone/i ) )
+				     || ( s.match( /Android/i ) && s.match( /Mobile/i ) ) ) {
+
+					return true;
+
+				}
+
+				return false;
+
+			}
+
+		</script>
+
+	</body>
+</html>
